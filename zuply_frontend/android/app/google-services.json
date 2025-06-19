@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1072216678900",
+    "project_id": "zuply-819ee",
+    "storage_bucket": "zuply-819ee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1072216678900:android:a3c720e87e94335f0519a1",
+        "android_client_info": {
+          "package_name": "com.company.zuply"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9agjiftVct49BkDUDpCMXWbK_qD-X-Q8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
