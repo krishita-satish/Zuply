@@ -1,39 +1,60 @@
-from rest_framework import viewsets
-from .models import Donation
-from .serializers import DonationSerializer
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
-from ai_ml.prioritization_model import process_request  # ✅ Corrected import based on ai_ml folder
-from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+import os
+import requests
 
-class DonationViewSet(viewsets.ModelViewSet):
-    queryset = Donation.objects.all().order_by('-created_at')
-    serializer_class = DonationSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
-    def perform_create(self, serializer):
-        # Save donation first so we can score it
-        donation = serializer.save()
+@method_decorator(csrf_exempt, name='dispatch')
+class AssistantView(APIView):
+    def post(self, request):
+        user_input = request.data.get("message", "")
+        if not user_input:
+            return Response({"error": "No message provided"}, status=400)
 
-        # Placeholder user profile info (later pull from actual user model)
-        user_data = {
-            "user_id": self.request.user.id,
-            "family_size": 4,  # TODO: Replace with real data from profile
-            "last_donation": timezone.now() - timezone.timedelta(hours=20),  # Example value
-            "feedback_score": 4.5,  # Placeholder
-            "urgency_flag": donation.is_emergency,
-            "special_needs": None,
-            "dietary_preference": donation.food_type,
-        }
+        if not MISTRAL_API_KEY:
+            return Response({"error": "MISTRAL_API_KEY is not configured in your environment."}, status=500)
 
-        # Run AI scoring
-        result = process_request(
-            user=user_data,
-            food_stock_level=120,  # TODO: Dynamic logic later
-            current_time=timezone.now(),
-            pincode=donation.pincode,
-            is_festival=False
-        )
+        try:
+            headers = {
+                "Authorization": f"Bearer {MISTRAL_API_KEY}",
+                "Content-Type": "application/json"
+            }
 
-        # Save updated score
-        donation.donation_score = result["score"]
-        donation.save()
+            data = {
+                "model": "mistral-medium",  # or mistral-small
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are Zuply Assistant, an AI helping users with food donation, food waste reduction, redistribution, and sustainability in India."
+                    },
+                    {
+                        "role": "user",
+                        "content": user_input
+                    }
+                ]
+            }
+
+            response = requests.post(
+                "https://api.mistral.ai/v1/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=10
+            )
+
+            json_response = response.json()
+            reply = json_response.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+            if not reply:
+                return Response({"error": "Mistral API returned an empty response."}, status=502)
+
+            return Response({"reply": reply}, status=200)
+
+        except requests.exceptions.RequestException as e:
+            return Response({"error": f"Network error: {str(e)}"}, status=503)
+
+        except Exception as e:
+            return Response({"error": f"Server error: {str(e)}"}, status=500)
